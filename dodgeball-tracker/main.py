@@ -1,9 +1,12 @@
 import cv2
 import mediapipe as mp
 import time
+from imutils.video import VideoStream
+import imutils
 
 # Initialize video capture
-cap = cv2.VideoCapture(1)
+vs = VideoStream(src=0).start()
+time.sleep(2.0)
 
 # Initialize mediapipe hand model and drawing utility
 mpHands = mp.solutions.hands
@@ -17,7 +20,8 @@ ball_trajectory = []
 last_launch_time = 0
 
 while True:
-    success, img = cap.read()
+    img = vs.read()
+    success = img is not None
     if not success:
         break
 
@@ -63,7 +67,7 @@ while True:
             palm_diag = (palm_height ** 2 + palm_width ** 2) ** 0.5
             hand_size = int(palm_diag * w * 0.5)
             hand_size = min(100, max(20, hand_size))  # reasonable size bounds
-            print("hand_size", hand_size)
+            print("hand_size", hand_size, palm_width, palm_height)
             # Example: launch a ball from the tip of the index finger (id==8)
             current_time = time.time()
             palm_cx = int((wrist.x + middle_mcp.x) / 2 * w)
@@ -106,5 +110,5 @@ while True:
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
-cap.release()
+vs.stop()
 cv2.destroyAllWindows()
