@@ -16,7 +16,7 @@ font_2xl = pygame.font.SysFont("Ariel", 100)
 # UI State
 ui = {
     "mode": "study",
-    "tasks": ["do math", "read notes", "breathe", "ask janet out maybe idk", "where is kl??", "is she hating me now :(("],
+    "tasks": ["do math", "read notes", "breathe", "ask out maybe idk", "where ??", "i :(("],
     "selected_task_index": 0,
     "countdown_seconds": 30 * 60,  # configurable total time in seconds
     "countdown_running": False,
