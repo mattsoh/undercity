@@ -8,31 +8,34 @@ from datetime import datetime
 import requests
 from io import BytesIO
 
+# Load environment
 load_dotenv()
 
 sp = Spotify(auth_manager=SpotifyOAuth(
     client_id=os.getenv("SPOTIFY_CLIENT_ID"),
     client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
     redirect_uri="http://127.0.0.1:8080/callback",
-    scope="user-read-playback-state user-read-currently-playing user-modify-playback-state user-library-modify",
+    scope="user-read-playback-state user-read-currently-playing user-modify-playback-state user-library-modify playlist-read-private",
     cache_path=os.path.join(os.path.dirname(__file__), ".spotipy_cache")
 ))
 
+# Initialize pygame
 pygame.init()
-WIDTH, HEIGHT = 442, 250
+WIDTH, HEIGHT = 320, 240
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Spotify UI")
 
+# Fonts
 font = pygame.font.SysFont("monospace", 18)
 font_small = pygame.font.SysFont("Arial", 16)
 font_large = pygame.font.SysFont("Arial", 26)
 font_xl = pygame.font.SysFont("Arial", 40)
-font_2xl = pygame.font.SysFont("Arial", 80)
 
+# UI State
 ui = {
-    "mode": "music",
+    "mode": "playlists",  # default to library
     "playlist_tracks": [],
-    "user_playlists": [],
+    "user_playlists": sp.current_user_playlists(limit=50)["items"],  # load immediately
     "selected_index": 0,
     "current_playlist_id": None,
     "down_key_time": None,
@@ -41,7 +44,8 @@ ui = {
     "slider_just_moved": False,
 }
 
-SLIDER_X = 117 + 10
+# Constants
+SLIDER_X = 10
 SLIDER_Y = HEIGHT - 25
 SLIDER_WIDTH = 300
 SLIDER_HEIGHT = 10
@@ -69,13 +73,11 @@ def load_image(url):
         return pygame.transform.scale(pygame.image.load(BytesIO(r.content)), (64, 64))
     except: return None
 
-def get_user_playlists():
-    return sp.current_user_playlists(limit=50)["items"]
-
 def get_tracks_from_playlist(playlist_id):
     return sp.playlist_items(playlist_id, limit=100)["items"]
 
-# UI
+
+# UI Drawing
 
 def draw_slider(items):
     if not items: return
@@ -84,70 +86,60 @@ def draw_slider(items):
     pygame.draw.rect(screen, (50, 150, 220), (pos_x - 6, SLIDER_Y - 4, 12, SLIDER_HEIGHT + 8), border_radius=4)
 
 def draw_tft():
-    tft_x = 117
-    pygame.draw.rect(screen, (255, 255, 255), (tft_x, 5, 320, 240))
+    screen.fill((255, 255, 255))
 
     if ui["mode"] == "music":
         track_info = get_current_track()
-        screen.blit(font_xl.render("Now Playing", True, (50, 50, 50)), (tft_x+10, 10))
+        screen.blit(font_xl.render("Now Playing", True, (50, 50, 50)), (10, 10))
         if track_info:
             img = load_image(track_info["image_url"])
-            if img: screen.blit(img, (tft_x+240, 10))
+            if img: screen.blit(img, (240, 10))
             text = f"{track_info['track']} — {track_info['artist']}"
             for i, line in enumerate(wrap_text(text, font_large, 220)):
-                screen.blit(font_large.render(line, True, (0, 100, 0)), (tft_x+10, 60+i*28))
-            screen.blit(font_small.render(f"Album: {track_info['album']}", True, (80, 80, 80)), (tft_x+10, 150))
+                screen.blit(font_large.render(line, True, (0, 100, 0)), (10, 60+i*28))
+            screen.blit(font_small.render(f"Album: {track_info['album']}", True, (80, 80, 80)), (10, 150))
         else:
-            screen.blit(font.render("Nothing playing", True, (120, 0, 0)), (tft_x+10, 60))
+            screen.blit(font.render("Nothing playing", True, (120, 0, 0)), (10, 60))
 
     elif ui["mode"] == "playlists":
         items = ui["user_playlists"]
-        total = len(items)
+        screen.blit(font_large.render("Your Playlists", True, (30, 30, 30)), (10, 10))
         per_page = 6
-        start = int(ui["slider_value"] * max(1, (total - per_page)))
+        start = int(ui["slider_value"] * max(1, (len(items) - per_page)))
         visible = items[start:start+per_page]
-        screen.blit(font_large.render("Your Playlists", True, (30, 30, 30)), (tft_x+10, 10))
         for i, pl in enumerate(visible):
             name = pl["name"]
-            global_index = start + i
-            color = (255, 255, 255) if global_index == ui["selected_index"] else (80, 80, 80)
-            bg = (0, 120, 200) if global_index == ui["selected_index"] else (230, 230, 230)
-            pygame.draw.rect(screen, bg, (tft_x+10, 50+i*26, 300, 24))
-            screen.blit(font_small.render(name[:35], True, color), (tft_x+14, 52+i*26))
+            idx = start + i
+            bg = (0, 120, 200) if idx == ui["selected_index"] else (230, 230, 230)
+            fg = (255, 255, 255) if idx == ui["selected_index"] else (80, 80, 80)
+            pygame.draw.rect(screen, bg, (10, 50+i*26, 300, 24))
+            screen.blit(font_small.render(name[:35], True, fg), (14, 52+i*26))
         draw_slider(items)
 
     elif ui["mode"] == "songs":
         items = ui["playlist_tracks"]
-        total = len(items)
+        screen.blit(font_large.render("Songs", True, (30, 30, 30)), (10, 10))
         per_page = 7
-        start = int(ui["slider_value"] * max(1, (total - per_page)))
+        start = int(ui["slider_value"] * max(1, (len(items) - per_page)))
         visible = items[start:start+per_page]
-        screen.blit(font_large.render("Songs", True, (30, 30, 30)), (tft_x+10, 10))
         for i, item in enumerate(visible):
             track = item.get("track")
-            if not track:
-                continue  # skip invalid track entries
-
-            text = f"{track.get('name', 'Unknown')} — {track['artists'][0]['name'] if track.get('artists') else 'Unknown'}"
-            global_index = start + i
-            color = (255, 255, 255) if global_index == ui["selected_index"] else (70, 70, 70)
-            bg = (0, 200, 100) if global_index == ui["selected_index"] else (220, 220, 220)
-            pygame.draw.rect(screen, bg, (tft_x+10, 50+i*22, 300, 20))
-            screen.blit(font_small.render(text[:40], True, color), (tft_x+14, 50+i*22))
+            if not track: continue
+            text = f"{track.get('name', 'Unknown')} — {track['artists'][0]['name']}"
+            idx = start + i
+            bg = (0, 200, 100) if idx == ui["selected_index"] else (220, 220, 220)
+            fg = (255, 255, 255) if idx == ui["selected_index"] else (70, 70, 70)
+            pygame.draw.rect(screen, bg, (10, 50+i*22, 300, 20))
+            screen.blit(font_small.render(text[:40], True, fg), (14, 50+i*22))
         draw_slider(items)
 
-def draw_epaper():
-    pygame.draw.rect(screen, (230, 230, 230), (0, 0, 112, 250))
-    screen.blit(font.render(datetime.now().strftime("%H:%M"), True, (0, 0, 0)), (10, 10))
-    screen.blit(font.render("Spotify", True, (0, 0, 0)), (10, 40))
 
 def render_ui():
-    screen.fill((100, 100, 100))
-    draw_epaper()
     draw_tft()
     pygame.display.flip()
 
-# Interaction
+
+# Input Handling
 
 def handle_mouse(event):
     if event.type == pygame.MOUSEBUTTONDOWN:
@@ -163,26 +155,40 @@ def handle_mouse(event):
             ui["slider_just_moved"] = True
         ui["slider_value"] = new_val
 
-
 def handle_key(event):
     current_items = ui["playlist_tracks"] if ui["mode"] == "songs" else ui["user_playlists"]
     visible_count = 7 if ui["mode"] == "songs" else 6
 
     if event.key == pygame.K_w:
         if ui["slider_just_moved"]:
-            # select top visible item
             start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
             ui["selected_index"] = start
             ui["slider_just_moved"] = False
         else:
-            ui["selected_index"] = max(0, ui["selected_index"] - 1)
+            if ui["selected_index"] > 0:
+                ui["selected_index"] -= 1
+            else:
+                # already at top -> scroll up
+                ui["slider_value"] = max(0.0, ui["slider_value"] - 0.1)
+                start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
+                ui["selected_index"] = start  # <- force selection to top of new visible list
+
     elif event.key == pygame.K_s:
         if ui["slider_just_moved"]:
             start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
             ui["selected_index"] = min(start + visible_count - 1, len(current_items) - 1)
             ui["slider_just_moved"] = False
         else:
-            ui["selected_index"] = min(len(current_items) - 1, ui["selected_index"] + 1)
+            if ui["selected_index"] < len(current_items) - 1:
+                ui["selected_index"] += 1
+            else:
+                # already at bottom -> scroll down
+                ui["slider_value"] = min(1.0, ui["slider_value"] + 0.1)
+                start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
+                ui["selected_index"] = min(start + visible_count - 1, len(current_items) - 1)
+
+
+
     elif event.key == pygame.K_RETURN:
         if ui["mode"] == "playlists":
             selected = ui["user_playlists"][ui["selected_index"]]
@@ -193,31 +199,23 @@ def handle_key(event):
             ui["mode"] = "songs"
         elif ui["mode"] == "songs":
             track = ui["playlist_tracks"][ui["selected_index"]]["track"]
-            playlist_id = ui["current_playlist_id"]
             sp.start_playback(
-                context_uri=f"spotify:playlist:{playlist_id}",
+                context_uri=f"spotify:playlist:{ui['current_playlist_id']}",
                 offset={"uri": track["uri"]}
             )
             ui["mode"] = "music"
+
     elif event.key == pygame.K_UP:
-        if ui["mode"] == "music":
-            current = sp.current_playback()
-            if current and current.get("context") and "playlist" in current["context"]["type"]:
-                playlist_id = current["context"]["uri"].split(":")[-1]
-                ui["playlist_tracks"] = get_tracks_from_playlist(playlist_id)
-                ui["current_playlist_id"] = playlist_id
-                ui["selected_index"] = 0
-                ui["slider_value"] = 0
-                ui["mode"] = "songs"
-        elif ui["mode"] == "songs":
-            ui["user_playlists"] = get_user_playlists()
+        if ui["mode"] == "songs":
+            ui["mode"] = "playlists"
             ui["selected_index"] = 0
             ui["slider_value"] = 0
+        elif ui["mode"] == "music":
             ui["mode"] = "playlists"
-        elif ui["mode"] == "playlists":
-            ui["mode"] = "music"
+
     elif event.key == pygame.K_DOWN:
         ui["down_key_time"] = pygame.time.get_ticks()
+
     elif event.key == pygame.K_RIGHT:
         sp.next_track()
     elif event.key == pygame.K_LEFT:
