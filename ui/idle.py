@@ -4,16 +4,13 @@ from PIL import Image, ImageSequence
 
 pygame.init()
 
-# Set up combined window: e-paper (left) + TFT (right)
-WIDTH, HEIGHT = 442, 250
+# Set up TFT screen only
+WIDTH, HEIGHT = 320, 240
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Dual-Screen UI Simulator")
-font = pygame.font.SysFont("monospace", 18)
-font_small = pygame.font.SysFont("Ariel", 16)
-font_medium = pygame.font.SysFont("monospace", 24)
-font_large = pygame.font.SysFont("Ariel", 36)
+pygame.display.set_caption("TFT Idle Screen")
 font_xl = pygame.font.SysFont("Ariel", 45)
-font_2xl = pygame.font.SysFont("Ariel", 100)
+font_2xl = pygame.font.SysFont("Ariel", 70)
+
 # UI State
 ui = {
     "mode": "idle",
@@ -34,61 +31,50 @@ def load_gif_frames(path):
 
     return frames
 
-epaper_gif_frames = load_gif_frames("cat.gif")
+# Load cat gif frames
+tft_gif_frames = load_gif_frames("cat.gif")
 gif_frame_index = 0
 gif_frame_timer = 0  # in milliseconds
 
-
-def draw_epaper():
+def draw_tft_idle():
     global gif_frame_index, gif_frame_timer
 
-    epd_x = 0
-    pygame.draw.rect(screen, (230, 230, 230), (epd_x, 0, 112, 250))  # e-paper background
+    # Background
+    screen.fill((255, 255, 255))
 
-    black = (0, 0, 0)
+    # 🕒 Time display
+    current_time_str = datetime.now().strftime("%H:%M")
+    time_surface = font_2xl.render(current_time_str, True, (0, 0, 0))
+    time_rect = time_surface.get_rect(center=(WIDTH // 2, 70))
+    screen.blit(time_surface, time_rect)
 
-    # ⏰ Get current time
-    current_time_str = datetime.now().strftime("%H:%M")  # e.g. "13:45"
-    time_surface = font_xl.render(current_time_str, True, black)
-    time_pos = (20, 50)
-    screen.blit(time_surface, time_pos)
-
-    # calculate where to place the GIF (below time)
-    gif_top = time_pos[1] + font_xl.get_height() + 10  # 10px padding under time
-
-    if epaper_gif_frames:
-        frame = epaper_gif_frames[gif_frame_index]
-
-        # Optional: scale the frame to fit within 92px width (e-paper margin)
-        frame = pygame.transform.scale(frame, (92, 92))  # adjust height as needed
-
-        screen.blit(frame, (10, gif_top))
-
-
-
-def draw_tft():
-    tft_x = 117
-    tft_y = 5
-    pygame.draw.rect(screen, (0, 0, 0), (tft_x, tft_y, 320, 240))
-
-
+    # 🐱 Cat GIF display
+    if tft_gif_frames:
+        frame = tft_gif_frames[gif_frame_index]
+        frame = pygame.transform.scale(frame, (120, 120))  # Resize to fit nicely
+        gif_rect = frame.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40))
+        screen.blit(frame, gif_rect)
 
 def render_ui():
-    screen.fill((100, 100, 100))  # background behind screens
-    draw_epaper()
-    draw_tft()
+    if ui["mode"] == "idle":
+        draw_tft_idle()
     pygame.display.flip()
 
 # Main loop
 running = True
+clock = pygame.time.Clock()
+
 while running:
     current_time = pygame.time.get_ticks()
-    if current_time - gif_frame_timer > 500:  # change frame every 100ms
+
+    # Advance GIF frame every 500ms
+    if current_time - gif_frame_timer > 500:
         gif_frame_timer = current_time
-        gif_frame_index = (gif_frame_index + 1) % len(epaper_gif_frames)
+        gif_frame_index = (gif_frame_index + 1) % len(tft_gif_frames)
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
     render_ui()
-
+    clock.tick(60)
