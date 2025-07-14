@@ -37,7 +37,8 @@ ui = {
     "current_playlist_id": None,
     "down_key_time": None,
     "slider_drag": False,
-    "slider_value": 0.0
+    "slider_value": 0.0,
+    "slider_just_moved": False,
 }
 
 SLIDER_X = 117 + 10
@@ -157,15 +158,31 @@ def handle_mouse(event):
         ui["slider_drag"] = False
     elif event.type == pygame.MOUSEMOTION and ui["slider_drag"]:
         mx = max(SLIDER_X, min(event.pos[0], SLIDER_X + SLIDER_WIDTH))
-        ui["slider_value"] = (mx - SLIDER_X) / SLIDER_WIDTH
+        new_val = (mx - SLIDER_X) / SLIDER_WIDTH
+        if abs(new_val - ui["slider_value"]) > 0.01:
+            ui["slider_just_moved"] = True
+        ui["slider_value"] = new_val
 
 
 def handle_key(event):
+    current_items = ui["playlist_tracks"] if ui["mode"] == "songs" else ui["user_playlists"]
+    visible_count = 7 if ui["mode"] == "songs" else 6
+
     if event.key == pygame.K_w:
-        ui["selected_index"] = max(0, ui["selected_index"] - 1)
+        if ui["slider_just_moved"]:
+            # select top visible item
+            start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
+            ui["selected_index"] = start
+            ui["slider_just_moved"] = False
+        else:
+            ui["selected_index"] = max(0, ui["selected_index"] - 1)
     elif event.key == pygame.K_s:
-        items = ui["playlist_tracks"] if ui["mode"] == "songs" else ui["user_playlists"]
-        ui["selected_index"] = min(len(items)-1, ui["selected_index"] + 1)
+        if ui["slider_just_moved"]:
+            start = int(ui["slider_value"] * max(1, len(current_items) - visible_count))
+            ui["selected_index"] = min(start + visible_count - 1, len(current_items) - 1)
+            ui["slider_just_moved"] = False
+        else:
+            ui["selected_index"] = min(len(current_items) - 1, ui["selected_index"] + 1)
     elif event.key == pygame.K_RETURN:
         if ui["mode"] == "playlists":
             selected = ui["user_playlists"][ui["selected_index"]]
