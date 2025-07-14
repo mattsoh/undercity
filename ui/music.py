@@ -175,8 +175,12 @@ def handle_key(event):
             ui["slider_value"] = 0
             ui["mode"] = "songs"
         elif ui["mode"] == "songs":
-            uri = ui["playlist_tracks"][ui["selected_index"]]["track"]["uri"]
-            sp.start_playback(uris=[uri])
+            track = ui["playlist_tracks"][ui["selected_index"]]["track"]
+            playlist_id = ui["current_playlist_id"]
+            sp.start_playback(
+                context_uri=f"spotify:playlist:{playlist_id}",
+                offset={"uri": track["uri"]}
+            )
             ui["mode"] = "music"
     elif event.key == pygame.K_UP:
         if ui["mode"] == "music":
